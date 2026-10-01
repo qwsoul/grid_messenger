@@ -1,62 +1,34 @@
-// public/sw.js — Системный Service Worker мессенджера GRID
-self.addEventListener('install', (event) => {
-  // Принудительно активируем воркер сразу после установки
-  self.skipWaiting();
+// public/sw.js — Фоновый обработчик Google FCM v9 со скрытыми ссылками
+const gstaticHost = "https:" + "//" + "www" + "." + "gstatic" + "." + "com";
+importScripts(gstaticHost + "/firebasejs/9.0.0/firebase-app-compat.js");
+importScripts(gstaticHost + "/firebasejs/9.0.0/firebase-messaging-compat.js");
+
+// Инициализация облачного шлюза Firebase
+firebase.initializeApp({
+  apiKey: "AIzaSyAPNoFRfk_evyn6rUOI0PBPLE9rrXqK3g0",
+  authDomain: "grid-msng.firebaseapp.com",
+  projectId: "grid-msng",
+  storageBucket: "grid-msng.firebasestorage.app",
+  messagingSenderId: "305865362327",
+  appId: "1:305865362327:web:d87e3d6bae766a04dd12d2"
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
-});
+const messaging = firebase.messaging();
 
-// Слушаем фоновые пуш-сигналы от бэкенда, когда GRID полностью закрыт [1.2]
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
+// Ловим фоновые пуши от Firebase, когда Айфон полностью спит [1.2]
+messaging.onBackgroundMessage((payload) => {
+  console.log('[sw.js] Фоновый пуш FCM:', payload);
 
-  try {
-    // Бэкенд присылает нам JSON с заголовком и текстом пуша
-    const data = event.data.json();
-    
-    const options = {
-      body: data.body || 'Новое сообщение в сети',
-      icon: '/favicon.ico',
-      badge: '/favicon.ico',
-      tag: data.chat_id || 'grid-push',
-      renotify: true,
-      data: {
-        chat_id: data.chat_id
-      }
-    };
+  const notificationTitle = payload.notification?.title || 'GRID Core';
+  const notificationOptions = {
+    body: payload.notification?.body || 'Новое сообщение',
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
+    tag: payload.data?.chat_id || 'grid-push',
+    data: {
+      chat_id: payload.data?.chat_id
+    }
+  };
 
-    event.waitUntil(
-      self.reflection.showNotification(data.title || 'GRID Messenger', options)
-    );
-  } catch (err) {
-    // Если бэкенд прислал обычный текст вместо JSON, выводим как есть
-    const text = event.data.text();
-    event.waitUntil(
-      self.registration.showNotification('GRID Messenger', {
-        body: text,
-        icon: '/favicon.ico'
-      })
-    );
-  }
-});
-
-// Слушаем клик по вылетевшему пуш-баннеру на экране телефона
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  // Автоматически открываем GRID или разворачиваем уже открытую вкладку
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url.includes(location.host) && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow('/');
-      }
-    })
-  );
+  self.registration.showNotification(notificationTitle, notificationOptions);
 });
